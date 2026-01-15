@@ -1,0 +1,7 @@
+﻿/* src/index.css - simple global styles (no PostCSS plugins required) */
+:root{
+  --bg:#f3f4f6;
+  --card:#ffffff;
+}
+html,body,#root{height:100%}
+body{margin:0;background:var(--bg);font-family:system-ui,Segoe UI,Roboto,Arial}
