@@ -45,14 +45,17 @@ function App() {
   };
 
   const handleActivate = async (id) => {
+    console.log("Activate clicked for", id);
     await activateWorkflow(id);
     await loadWorkflows();
   };
 
   const handleDeactivate = async (id) => {
+    console.log("Deactivate clicked for", id);
     await deactivateWorkflow(id);
     await loadWorkflows();
   };
+
 
   const handleViewRuns = async (workflow) => {
     setSelectedWorkflow(workflow);
