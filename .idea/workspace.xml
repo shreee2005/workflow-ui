@@ -6,7 +6,16 @@
   <component name="ChangeListManager">
     <list default="true" id="61870d4e-ea27-4c7b-8808-9eeb40c4269a" name="Changes" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/dist/assets/index-Bl41sj3Q.js" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/dist/assets/index-N0PuP5Wo.css" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/dist/index.html" beforeDir="false" afterPath="$PROJECT_DIR$/dist/index.html" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/.env" beforeDir="false" afterPath="$PROJECT_DIR$/src/.env" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/App.jsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/App.jsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/api.js" beforeDir="false" afterPath="$PROJECT_DIR$/src/api.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/components/CreateWorkflowForm.jsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/components/CreateWorkflowForm.jsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/components/WorkflowList.jsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/components/WorkflowList.jsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/components/WorkflowRunsPanel.jsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/components/WorkflowRunsPanel.jsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/index.css" beforeDir="false" afterPath="$PROJECT_DIR$/src/index.css" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
