@@ -110,6 +110,16 @@ export const workflowApi = {
 
 export const runApi = {
   get: (runId) => request(`/api/runs/${runId}`, { auth: true }),
+  steps: (runId) => request(`/api/runs/${runId}/steps`, { auth: true }),
+};
+
+export const pluginApi = {
+  listPublic: () => request("/plugins"),
+  list: () => request("/api/plugins", { auth: true }),
+  get: (id) => request(`/api/plugins/${id}`, { auth: true }),
+  create: (body) => request("/api/plugins", { method: "POST", auth: true, body }),
+  update: (id, body) => request(`/api/plugins/${id}`, { method: "PUT", auth: true, body }),
+  remove: (id) => request(`/api/plugins/${id}`, { method: "DELETE", auth: true }),
 };
 
 export const templateApi = {
