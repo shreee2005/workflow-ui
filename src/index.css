@@ -950,3 +950,42 @@ tr:hover td {
     grid-template-columns: 1fr;
   }
 }
+
+/* Gantt Timeline Animations & Custom Styles */
+.timeline-bar-running {
+  animation: pulseGlowRunning 2s infinite ease-in-out;
+}
+
+.timeline-bar-waiting {
+  animation: pulseGlowWaiting 2s infinite ease-in-out;
+}
+
+@keyframes pulseGlowRunning {
+  0% {
+    opacity: 0.85;
+    box-shadow: 0 0 4px rgba(124, 58, 237, 0.4);
+  }
+  50% {
+    opacity: 1;
+    box-shadow: 0 0 14px rgba(124, 58, 237, 0.8);
+  }
+  100% {
+    opacity: 0.85;
+    box-shadow: 0 0 4px rgba(124, 58, 237, 0.4);
+  }
+}
+
+@keyframes pulseGlowWaiting {
+  0% {
+    opacity: 0.85;
+    box-shadow: 0 0 4px rgba(245, 158, 11, 0.4);
+  }
+  50% {
+    opacity: 1;
+    box-shadow: 0 0 12px rgba(245, 158, 11, 0.8);
+  }
+  100% {
+    opacity: 0.85;
+    box-shadow: 0 0 4px rgba(245, 158, 11, 0.4);
+  }
+}

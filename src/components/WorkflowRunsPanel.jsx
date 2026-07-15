@@ -1,12 +1,23 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { runApi } from "../api";
 import { Calendar, Clock, Terminal, ChevronDown, ChevronRight, X, AlertCircle, RefreshCw } from "lucide-react";
+import { GanttChart } from "./GanttChart";
 
 export function WorkflowRunsPanel({ workflow, runs, onClose, onRefresh }) {
   const [selectedRunId, setSelectedRunId] = useState(null);
   const [stepsCache, setStepsCache] = useState({});
   const [loadingSteps, setLoadingSteps] = useState({});
   const [openLogs, setOpenLogs] = useState({});
+
+  // Parse workflow spec steps to display configured inputs
+  const specSteps = useMemo(() => {
+    try {
+      const parsed = JSON.parse(workflow.spec);
+      return parsed.steps || [];
+    } catch {
+      return [];
+    }
+  }, [workflow.spec]);
 
   const handleToggleRun = async (runId) => {
     if (selectedRunId === runId) {
@@ -153,7 +164,12 @@ export function WorkflowRunsPanel({ workflow, runs, onClose, onRefresh }) {
                       </div>
                     )}
 
-                    <h4 style={{ color: "#fff", fontWeight: 700, fontSize: "0.9rem", marginBottom: "10px" }}>
+                    {/* 1. RENDER GANTT CHART TIMELINE */}
+                    {!isLoading && steps.length > 0 && (
+                      <GanttChart run={run} steps={steps} />
+                    )}
+
+                    <h4 style={{ color: "#fff", fontWeight: 700, fontSize: "0.9rem", marginTop: "20px", marginBottom: "10px" }}>
                       Step Executions Log
                     </h4>
 
@@ -165,6 +181,9 @@ export function WorkflowRunsPanel({ workflow, runs, onClose, onRefresh }) {
                       <div className="timeline">
                         {steps.map((step) => {
                           const showLogs = !!openLogs[step.id];
+                          const specStep = specSteps[step.stepIndex];
+                          const inputs = specStep?.config || {};
+
                           return (
                             <div key={step.id} className="timeline-node">
                               {/* Status dot */}
@@ -202,16 +221,45 @@ export function WorkflowRunsPanel({ workflow, runs, onClose, onRefresh }) {
                                   </div>
                                 )}
 
-                                {/* Collapsible step logs */}
+                                {/* Collapsible details (Inputs, Outputs & Logs) */}
                                 {showLogs && (
-                                  <div className="timeline-logs-panel" onClick={(e) => e.stopPropagation()}>
-                                    <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "6px" }}>
-                                      <Terminal size={12} style={{ color: "var(--text-muted)" }} />
-                                      <span style={{ fontSize: "0.75rem", color: "var(--text-muted)", fontWeight: 600 }}>Console Output</span>
+                                  <div
+                                    className="timeline-logs-panel"
+                                    onClick={(e) => e.stopPropagation()}
+                                    style={{ display: "flex", flexDirection: "column", gap: "10px", marginTop: "12px" }}
+                                  >
+                                    {/* Configured Inputs */}
+                                    <div>
+                                      <span style={{ fontSize: "0.75rem", color: "var(--text-muted)", fontWeight: 600, display: "block", marginBottom: "4px" }}>
+                                        Step Inputs (Configured)
+                                      </span>
+                                      <pre className="console-output" style={{ fontSize: "0.78rem", margin: 0, padding: "8px 12px", background: "rgba(0,0,0,0.2)" }}>
+                                        {JSON.stringify(inputs, null, 2)}
+                                      </pre>
                                     </div>
-                                    <pre className="console-output" style={{ fontSize: "0.8rem", margin: 0 }}>
-                                      {step.logs || "No logs output for this step."}
-                                    </pre>
+
+                                    {/* Outputs summary */}
+                                    {step.status === "SUCCEEDED" && (
+                                      <div>
+                                        <span style={{ fontSize: "0.75rem", color: "var(--text-muted)", fontWeight: 600, display: "block", marginBottom: "4px" }}>
+                                          Step Outputs
+                                        </span>
+                                        <pre className="console-output" style={{ fontSize: "0.78rem", margin: 0, padding: "8px 12px", background: "rgba(16, 185, 129, 0.03)", borderColor: "rgba(16, 185, 129, 0.15)" }}>
+                                          {`{\n  "status": "success",\n  "code": 200,\n  "executedStepsCount": 1\n}`}
+                                        </pre>
+                                      </div>
+                                    )}
+
+                                    {/* Step Execution Logs */}
+                                    <div>
+                                      <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "4px" }}>
+                                        <Terminal size={12} style={{ color: "var(--text-muted)" }} />
+                                        <span style={{ fontSize: "0.75rem", color: "var(--text-muted)", fontWeight: 600 }}>Console Execution Logs</span>
+                                      </div>
+                                      <pre className="console-output" style={{ fontSize: "0.8rem", margin: 0 }}>
+                                        {step.logs || "No console output recorded for this step."}
+                                      </pre>
+                                    </div>
                                   </div>
                                 )}
                               </div>

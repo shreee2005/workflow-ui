@@ -20,6 +20,7 @@ import {
 import { WorkflowList } from "./components/WorkflowList";
 import { TemplateMarketplace } from "./components/TemplateMarketplace";
 import { WorkflowRunsPanel } from "./components/WorkflowRunsPanel";
+import { WorkflowDesigner } from "./components/WorkflowDesigner";
 
 // Import Lucide icons
 import {
@@ -525,6 +526,19 @@ function App() {
     }
   };
 
+  const handleDesignerChange = (updatedSteps) => {
+    setBuilderSteps(updatedSteps);
+    setWf((p) => ({ ...p, spec: JSON.stringify({ steps: updatedSteps }, null, 2) }));
+  };
+
+  const handleNameChange = (name) => {
+    setWf((p) => ({ ...p, name }));
+  };
+
+  const handleActiveChange = (active) => {
+    setWf((p) => ({ ...p, active }));
+  };
+
   // Sidebar Icons Mapping
   const getNavIcon = (name) => {
     switch (name) {
@@ -699,239 +713,40 @@ function App() {
 
           {/* WORKFLOWS BUILDER & LIST */}
           {page === "Workflows" && (
-            <div className="grid-2">
-              {/* Left Column: Visual workflow spec creator */}
-              <Panel
-                title={wf.id ? "Edit Workflow Details" : "Build New Workflow"}
-                hint="Use the interactive step builder or toggle to raw JSON spec schema."
-                icon={<GitBranch size={16} />}
-              >
-                <div style={{ display: "flex", gap: "10px" }}>
-                  <Field label="Workflow ID (Auto-Generated)">
-                    <input
-                      placeholder="Will generate on Create"
-                      value={wf.id}
-                      onChange={(e) => setWf((p) => ({ ...p, id: e.target.value }))}
-                      disabled={true}
-                      style={{ opacity: 0.7 }}
-                    />
-                  </Field>
-                  <Field label="Workflow Name">
-                    <input
-                      placeholder="e.g. Stripe Webhook Parser"
-                      value={wf.name}
-                      onChange={(e) => setWf((p) => ({ ...p, name: e.target.value }))}
-                      required
-                    />
-                  </Field>
-                </div>
-
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "10px", borderBottom: "1px solid var(--border)", paddingBottom: "10px" }}>
-                  <span className="label">Step Configuration Builder</span>
-                  <div className="tab-row">
-                    <button
-                      className={`btn btn-sm ${editorTab === "Visual" ? "btn-primary" : "btn-ghost"}`}
-                      style={{ padding: "4px 10px", borderRadius: "99px" }}
-                      onClick={() => setEditorTab("Visual")}
-                    >
-                      Interactive GUI
-                    </button>
-                    <button
-                      className={`btn btn-sm ${editorTab === "Raw" ? "btn-primary" : "btn-ghost"}`}
-                      style={{ padding: "4px 10px", borderRadius: "99px" }}
-                      onClick={() => setEditorTab("Raw")}
-                    >
-                      Raw JSON Spec
-                    </button>
-                  </div>
-                </div>
-
-                {editorTab === "Raw" ? (
-                  <Field label="JSON Spec Document">
-                    <textarea
-                      rows={12}
-                      value={wf.spec}
-                      onChange={(e) => setWf((p) => ({ ...p, spec: e.target.value }))}
-                    />
-                  </Field>
-                ) : (
-                  <div className="stack" style={{ gap: "14px", marginTop: "10px" }}>
-                    {builderSteps.length === 0 ? (
-                      <div
-                        style={{
-                          border: "1px dashed var(--border)",
-                          borderRadius: "var(--radius-md)",
-                          padding: "24px",
-                          textAlign: "center",
-                          color: "var(--text-muted)",
-                        }}
-                      >
-                        <HelpCircle size={32} style={{ margin: "0 auto 10px", color: "var(--text-muted)" }} />
-                        <p>No execution steps defined yet.</p>
-                        <p style={{ fontSize: "0.8rem", marginTop: "4px" }}>Click on an active plugin type below to append a step.</p>
-                      </div>
-                    ) : (
-                      builderSteps.map((step, idx) => {
-                        const plugin = pluginsCache.find((p) => p.key === step.type);
-                        let schema = { properties: {} };
-                        if (plugin && plugin.configSchema) {
-                          try {
-                            schema = JSON.parse(plugin.configSchema);
-                          } catch {}
-                        }
-
-                        return (
-                          <div key={idx} className="builder-step-card">
-                            <div className="builder-step-header">
-                              <span className="builder-step-title">
-                                {plugin ? getPluginIcon(plugin.icon, 16) : <Terminal size={16} />}
-                                #{idx + 1}: {plugin ? plugin.name : step.type}
-                              </span>
-                              <span className="builder-step-badge">{step.type.toUpperCase()}</span>
-                            </div>
-
-                            {/* Render step details form matching configSchema properties */}
-                            <div className="stack" style={{ gap: "12px", padding: "4px 0" }}>
-                              {schema.properties &&
-                                Object.entries(schema.properties).map(([propKey, propVal]) => {
-                                  const required = schema.required && schema.required.includes(propKey);
-                                  const value = step.config[propKey] !== undefined ? step.config[propKey] : "";
-
-                                  return (
-                                    <div key={propKey} className="field">
-                                      <label className="label" style={{ fontSize: "0.8rem", color: "#cbd5e1" }}>
-                                        {propVal.title || propKey}
-                                        {required && <span style={{ color: "var(--danger)", marginLeft: "2px" }}>*</span>}
-                                      </label>
-
-                                      {/* String with Enum values */}
-                                      {propVal.enum ? (
-                                        <select
-                                          value={value}
-                                          onChange={(e) => handleUpdateStepConfig(idx, propKey, e.target.value)}
-                                          style={{ padding: "6px 10px", fontSize: "0.85rem" }}
-                                        >
-                                          {propVal.enum.map((opt) => (
-                                            <option key={opt} value={opt}>
-                                              {opt}
-                                            </option>
-                                          ))}
-                                        </select>
-                                      ) : propVal.type === "integer" ? (
-                                        /* Integer values */
-                                        <input
-                                          type="number"
-                                          min={propVal.minimum}
-                                          placeholder={propVal.description || ""}
-                                          value={value}
-                                          onChange={(e) => handleUpdateStepConfig(idx, propKey, parseInt(e.target.value) || 0)}
-                                          style={{ padding: "6px 10px", fontSize: "0.85rem" }}
-                                        />
-                                      ) : propKey === "message" || propKey === "query" || propKey === "body" ? (
-                                        /* Multi-line inputs for long values */
-                                        <textarea
-                                          rows={3}
-                                          placeholder={propVal.description || ""}
-                                          value={value}
-                                          onChange={(e) => handleUpdateStepConfig(idx, propKey, e.target.value)}
-                                          style={{ padding: "6px 10px", fontSize: "0.85rem", minHeight: "60px" }}
-                                        />
-                                      ) : (
-                                        /* Standard Text values */
-                                        <input
-                                          type="text"
-                                          placeholder={propVal.description || ""}
-                                          value={value}
-                                          onChange={(e) => handleUpdateStepConfig(idx, propKey, e.target.value)}
-                                          style={{ padding: "6px 10px", fontSize: "0.85rem" }}
-                                        />
-                                      )}
-                                    </div>
-                                  );
-                                })}
-                            </div>
-
-                            {/* Move and delete actions */}
-                            <div className="builder-controls">
-                              <div style={{ display: "flex", gap: "6px" }}>
-                                <button
-                                  className="btn btn-ghost btn-sm"
-                                  type="button"
-                                  onClick={() => handleMoveStep(idx, -1)}
-                                  disabled={idx === 0}
-                                  style={{ padding: "4px" }}
-                                >
-                                  <ArrowUp size={12} />
-                                </button>
-                                <button
-                                  className="btn btn-ghost btn-sm"
-                                  type="button"
-                                  onClick={() => handleMoveStep(idx, 1)}
-                                  disabled={idx === builderSteps.length - 1}
-                                  style={{ padding: "4px" }}
-                                >
-                                  <ArrowDown size={12} />
-                                </button>
-                              </div>
-                              <button
-                                className="btn btn-danger btn-sm"
-                                type="button"
-                                onClick={() => handleRemoveBuilderStep(idx)}
-                                style={{ padding: "4px 8px", background: "rgba(239, 68, 68, 0.15)", color: "#fca5a5", border: "1px solid rgba(239, 68, 68, 0.25)" }}
-                              >
-                                <Trash2 size={12} />
-                                Remove Step
-                              </button>
-                            </div>
-                          </div>
-                        );
-                      })
-                    )}
-
-                    {/* Step selection from available plugins */}
-                    <div style={{ borderTop: "1px solid var(--border)", paddingTop: "14px", marginTop: "6px" }}>
-                      <span className="label" style={{ display: "block", marginBottom: "8px" }}>Append Step from Catalog</span>
-                      <div className="btn-row">
-                        {pluginsCache.map((plugin) => (
-                          <button
-                            key={plugin.key}
-                            className="btn btn-ghost btn-sm"
-                            type="button"
-                            onClick={() => handleAddBuilderStep(plugin.key)}
-                          >
-                            <Plus size={12} />
-                            {plugin.name}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                <label className="checkbox-row" style={{ marginTop: "10px" }}>
-                  <input type="checkbox" checked={wf.active} onChange={(e) => setWf((p) => ({ ...p, active: e.target.checked }))} />
-                  Activate immediately on save
-                </label>
-
-                <div className="btn-row" style={{ marginTop: "12px" }}>
-                  <button className="btn btn-primary" disabled={busy} onClick={handleValidateAndSubmitWorkflow}>
-                    Save Workflow
-                  </button>
-                  <button className="btn btn-ghost" onClick={() => setWf(WF_DEFAULT)}>
-                    Clear Builder Form
-                  </button>
-                </div>
-              </Panel>
-
-              {/* Right Column: Workflows list and execution options */}
-              <div className="stack">
+            wf.name ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+                <button
+                  className="btn btn-ghost btn-sm"
+                  style={{ width: "fit-content" }}
+                  onClick={() => setWf(WF_DEFAULT)}
+                >
+                  ← Back to Workflows List
+                </button>
+                <WorkflowDesigner
+                  plugins={pluginsCache}
+                  steps={builderSteps}
+                  onChange={handleDesignerChange}
+                  workflowName={wf.name}
+                  onNameChange={handleNameChange}
+                  active={wf.active}
+                  onActiveChange={handleActiveChange}
+                  onSave={handleValidateAndSubmitWorkflow}
+                  busy={busy}
+                />
+              </div>
+            ) : (
+              <div className="grid-2">
                 <Panel title="Workflow Instances" hint="Load and modify workflows." icon={<GitBranch size={16} />}>
-                  <div className="btn-row">
-                    <button className="btn btn-primary" disabled={busy} onClick={() => runAction(() => workflowApi.list(), setWorkflowCache)}>
+                  <div className="btn-row" style={{ justifyContent: "space-between", alignItems: "center" }}>
+                    <button className="btn btn-primary" onClick={() => setWf({ id: "", name: "New Workflow", active: true, spec: '{"steps":[]}' })}>
+                      <Plus size={14} />
+                      Build New Workflow
+                    </button>
+                    <button className="btn btn-ghost" disabled={busy} onClick={() => runAction(() => workflowApi.list(), setWorkflowCache)}>
                       List Workflows
                     </button>
                   </div>
-                  <div className="table-wrap" style={{ maxHeight: "360px", overflowY: "auto" }}>
+                  <div className="table-wrap" style={{ maxHeight: "360px", overflowY: "auto", marginTop: "12px" }}>
                     <table>
                       <thead>
                         <tr>
@@ -987,7 +802,7 @@ function App() {
                   </button>
                 </Panel>
               </div>
-            </div>
+            )
           )}
 
           {/* TEMPLATES MARKETPLACE */}
