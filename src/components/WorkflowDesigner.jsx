@@ -189,34 +189,94 @@ export function WorkflowDesigner({
         </p>
 
         <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginTop: "4px" }}>
-          {plugins.map((plugin) => (
-            <div
-              key={plugin.key}
-              draggable={true}
-              onDragStart={(e) => handleDragStartPalette(e, plugin.key)}
-              style={{
-                background: "var(--surface-soft)",
-                border: "1px solid var(--border)",
-                borderRadius: "var(--radius-md)",
-                padding: "12px",
-                cursor: "grab",
-                display: "flex",
-                alignItems: "center",
-                gap: "10px",
-                transition: "all 0.2s ease",
-              }}
-              onMouseEnter={(e) => (e.currentTarget.style.borderColor = "rgba(124, 58, 237, 0.4)")}
-              onMouseLeave={(e) => (e.currentTarget.style.borderColor = "var(--border)")}
-            >
-              <div style={{ fontSize: "1.1rem" }}>{getPluginIcon(plugin.icon, 16)}</div>
-              <div>
-                <div style={{ fontWeight: 600, fontSize: "0.85rem", color: "#fff" }}>{plugin.name}</div>
-                <div style={{ fontSize: "0.72rem", color: "var(--text-muted)", textTransform: "uppercase", marginTop: "2px" }}>
-                  {plugin.category}
-                </div>
-              </div>
+          {plugins.length === 0 ? (
+            <div style={{ padding: "14px", border: "1px dashed var(--border)", borderRadius: "6px", textAlign: "center", fontSize: "0.8rem", color: "var(--text-muted)" }}>
+              No executors found. Log in or check backend connection.
             </div>
-          ))}
+          ) : (
+            plugins.map((plugin) => (
+              <div
+                key={plugin.key}
+                draggable={true}
+                onDragStart={(e) => handleDragStartPalette(e, plugin.key)}
+                style={{
+                  background: "var(--surface-soft)",
+                  border: "1px solid var(--border)",
+                  borderRadius: "var(--radius-md)",
+                  padding: "10px 12px",
+                  cursor: "grab",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: "8px",
+                  transition: "all 0.2s ease",
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.borderColor = "rgba(124, 58, 237, 0.4)")}
+                onMouseLeave={(e) => (e.currentTarget.style.borderColor = "var(--border)")}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: "10px", minWidth: 0 }}>
+                  <div style={{ fontSize: "1.1rem", flexShrink: 0 }}>{getPluginIcon(plugin.icon, 16)}</div>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontWeight: 600, fontSize: "0.82rem", color: "#fff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} title={plugin.name}>
+                      {plugin.name}
+                    </div>
+                    <div style={{ fontSize: "0.68rem", color: "var(--text-muted)", textTransform: "uppercase", marginTop: "1px" }}>
+                      {plugin.category}
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  style={{
+                    background: "rgba(255,255,255,0.05)",
+                    border: "none",
+                    borderRadius: "50%",
+                    width: "22px",
+                    height: "22px",
+                    display: "grid",
+                    placeItems: "center",
+                    cursor: "pointer",
+                    color: "var(--text-muted)",
+                    flexShrink: 0,
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = "var(--primary)";
+                    e.currentTarget.style.color = "#fff";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = "rgba(255,255,255,0.05)";
+                    e.currentTarget.style.color = "var(--text-muted)";
+                  }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const newStep = {
+                      type: plugin.key,
+                      config: {},
+                    };
+                    if (plugin.configSchema) {
+                      try {
+                        const schema = JSON.parse(plugin.configSchema);
+                        if (schema.properties) {
+                          Object.entries(schema.properties).forEach(([k, prop]) => {
+                            if (prop.default !== undefined) {
+                              newStep.config[k] = prop.default;
+                            }
+                          });
+                        }
+                      } catch {}
+                    }
+                    const updated = [...steps, newStep];
+                    onChange(updated);
+                    setSelectedIdx(updated.length - 1);
+                  }}
+                  title="Click to append step"
+                >
+                  <Plus size={12} />
+                </button>
+              </div>
+            ))
+          )}
         </div>
       </div>
 

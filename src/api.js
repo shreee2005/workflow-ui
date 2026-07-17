@@ -137,6 +137,10 @@ export const teamApi = {
   members: (teamId) => request(`/api/teams/${teamId}/members`, { auth: true }),
   invite: (teamId, body) => request(`/api/teams/${teamId}/invite`, { method: "POST", auth: true, body }),
   acceptInvite: (teamId, inviteId) => request(`/api/teams/${teamId}/invites/${inviteId}/accept`, { method: "POST", auth: true }),
+  declineInvite: (teamId, inviteId) => request(`/api/teams/${teamId}/invites/${inviteId}/decline`, { method: "POST", auth: true }),
+  pendingInvites: (teamId) => request(`/api/teams/${teamId}/invites/pending`, { auth: true }),
+  cancelInvite: (teamId, inviteId) => request(`/api/teams/${teamId}/invites/${inviteId}`, { method: "DELETE", auth: true }),
+  myInvitations: () => request("/api/teams/invitations", { auth: true }),
 };
 
 export const keyApi = {

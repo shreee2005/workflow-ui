@@ -239,6 +239,32 @@ function AuthScreen({ onAuthed }) {
           <p className="app-subtitle">Connect & automate premium pipelines</p>
         </div>
 
+        {(() => {
+          const pending = sessionStorage.getItem("pending_invite");
+          if (!pending) return null;
+          try {
+            const data = JSON.parse(pending);
+            return (
+              <div style={{
+                background: "rgba(124, 58, 237, 0.08)",
+                border: "1px solid rgba(124, 58, 237, 0.25)",
+                borderRadius: "var(--radius-md)",
+                padding: "10px",
+                marginBottom: "14px",
+                fontSize: "0.78rem",
+                color: "#d8b4fe",
+                textAlign: "center",
+                lineHeight: 1.4
+              }}>
+                <span style={{ fontWeight: 600, color: "#fff", display: "block", marginBottom: "2px" }}>📬 Invitation Received</span>
+                Please sign in or register to review and accept.
+              </div>
+            );
+          } catch {
+            return null;
+          }
+        })()}
+
         <div className="tab-row" style={{ margin: "10px auto" }}>
           <button className={`btn btn-sm ${mode === "login" ? "btn-primary" : "btn-ghost"}`} style={{ borderRadius: "99px" }} onClick={() => setMode("login")}>Login</button>
           <button className={`btn btn-sm ${mode === "register" ? "btn-primary" : "btn-ghost"}`} style={{ borderRadius: "99px" }} onClick={() => setMode("register")}>Register</button>
@@ -296,6 +322,31 @@ function App() {
   const [runCache, setRunCache] = useState([]);
   const [templateCache, setTemplateCache] = useState([]);
   const [pluginsCache, setPluginsCache] = useState([]);
+  const [teamMembersList, setTeamMembersList] = useState([]);
+  const [pendingInvitesList, setPendingInvitesList] = useState([]);
+  const [activeInvitationBanner, setActiveInvitationBanner] = useState(null);
+  const [receivedInvitations, setReceivedInvitations] = useState([]);
+  const [toast, setToast] = useState(null);
+
+  const [myTeamsList, setMyTeamsList] = useState([]);
+  const [showCreatePlugin, setShowCreatePlugin] = useState(false);
+  const [editingPlugin, setEditingPlugin] = useState(null);
+  const [newPluginForm, setNewPluginForm] = useState({
+    key: "",
+    name: "",
+    description: "",
+    category: "Core",
+    icon: "🔌",
+    configSchema: '{"properties":{}}',
+    active: true
+  });
+  const [webhookPayload, setWebhookPayload] = useState('{\n  "test": true\n}');
+  const [webhookIdempotencyKey, setWebhookIdempotencyKey] = useState("");
+
+  const showToast = (message, type = "success") => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 5000);
+  };
 
   // Selected details
   const [activeRunWorkflow, setActiveRunWorkflow] = useState(null);
@@ -340,7 +391,7 @@ function App() {
       setOutput(pretty(data));
       return data;
     } catch (err) {
-      if (err.status === 401 || err.status === 403) {
+      if (err.status === 401) {
         handleSessionExpired();
       }
       setOutput(`Error: ${err.message}\n\n${pretty(err.data || {})}`);
@@ -369,6 +420,31 @@ function App() {
     // Authenticated data fetch
     runAction(() => workflowApi.list(), setWorkflowCache).catch(() => {});
     runAction(() => templateApi.list(false), setTemplateCache).catch(() => {});
+    runAction(() => pluginApi.list(), setPluginsCache).catch(() => {});
+    runAction(() => teamApi.myInvitations(), setReceivedInvitations).catch(() => {});
+    runAction(() => teamApi.list(), setMyTeamsList).catch(() => {});
+
+    // Check for pending invite in sessionStorage
+    const pending = sessionStorage.getItem("pending_invite");
+    if (pending) {
+      try {
+        const { teamId, inviteId } = JSON.parse(pending);
+        setActiveInvitationBanner({ teamId, inviteId });
+      } catch {}
+    }
+  }, [isAuthed]);
+
+  // URL matching scanner for invitation links
+  useEffect(() => {
+    const match = window.location.pathname.match(/\/teams\/([^/]+)\/invites\/([^/]+)\/accept/);
+    if (match) {
+      const [, teamId, inviteId] = match;
+      if (isAuthed) {
+        setActiveInvitationBanner({ teamId, inviteId });
+      } else {
+        sessionStorage.setItem("pending_invite", JSON.stringify({ teamId, inviteId }));
+      }
+    }
   }, [isAuthed]);
 
   // Persists states
@@ -539,6 +615,33 @@ function App() {
     setWf((p) => ({ ...p, active }));
   };
 
+  const refreshTeamWorkspaceInfo = async (teamId) => {
+    if (!teamId) return;
+    setBusy(true);
+    try {
+      const members = await teamApi.members(teamId);
+      setTeamMembersList(members);
+    } catch (err) {
+      console.error("Failed to fetch team members", err);
+      setTeamMembersList([]);
+    }
+    try {
+      const pending = await teamApi.pendingInvites(teamId);
+      setPendingInvitesList(pending);
+    } catch (err) {
+      console.error("Failed to fetch pending invites", err);
+      setPendingInvitesList([]);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isAuthed && team.teamId && page === "Teams") {
+      refreshTeamWorkspaceInfo(team.teamId);
+    }
+  }, [team.teamId, page, isAuthed]);
+
   // Sidebar Icons Mapping
   const getNavIcon = (name) => {
     switch (name) {
@@ -631,6 +734,60 @@ function App() {
         </header>
 
         <div className="main-scroll">
+          {activeInvitationBanner && (
+            <div style={{
+              background: "linear-gradient(135deg, rgba(124, 58, 237, 0.12), rgba(79, 70, 229, 0.12))",
+              border: "1px solid rgba(124, 58, 237, 0.35)",
+              borderRadius: "var(--radius-md)",
+              padding: "14px 18px",
+              marginBottom: "18px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: "14px",
+              boxShadow: "0 4px 15px rgba(0, 0, 0, 0.2)"
+            }}>
+              <div>
+                <strong style={{ color: "#fff", display: "block", fontSize: "0.9rem", marginBottom: "3px" }}>
+                  📬 Team Invitation Received
+                </strong>
+                <span style={{ fontSize: "0.78rem", color: "var(--text-muted)" }}>
+                  You have been invited to join Team Workspace: <code className="mono" style={{ color: "#c084fc", background: "rgba(0,0,0,0.2)", padding: "2px 5px", borderRadius: "3px" }}>{activeInvitationBanner.teamId}</code>
+                </span>
+              </div>
+              <div style={{ display: "flex", gap: "8px" }}>
+                <button
+                  className="btn btn-primary btn-sm"
+                  style={{ whiteSpace: "nowrap", padding: "5px 12px", fontSize: "0.78rem" }}
+                  onClick={() => runAction(
+                    () => teamApi.acceptInvite(activeInvitationBanner.teamId, activeInvitationBanner.inviteId),
+                    null,
+                    () => {
+                      alert("Success: You have joined the team!");
+                      setTeam((p) => ({ ...p, teamId: activeInvitationBanner.teamId }));
+                      setPage("Teams");
+                      setActiveInvitationBanner(null);
+                      sessionStorage.removeItem("pending_invite");
+                      window.history.replaceState({}, document.title, "/");
+                    }
+                  )}
+                >
+                  Accept Invite
+                </button>
+                <button
+                  className="btn btn-ghost btn-sm"
+                  style={{ border: "1px solid var(--border)", whiteSpace: "nowrap", padding: "5px 12px", fontSize: "0.78rem" }}
+                  onClick={() => {
+                    setActiveInvitationBanner(null);
+                    sessionStorage.removeItem("pending_invite");
+                    window.history.replaceState({}, document.title, "/");
+                  }}
+                >
+                  Dismiss
+                </button>
+              </div>
+            </div>
+          )}
           
           {/* DASHBOARD PAGE */}
           {page === "Dashboard" && (
@@ -641,6 +798,63 @@ function App() {
                 <Metric label="Inactive" value={dashboardStats.inactive} type="warning" icon={<AlertCircle size={16} />} />
                 <Metric label="Templates Loaded" value={dashboardStats.templates} type="danger" icon={<Compass size={16} />} />
               </div>
+
+              {receivedInvitations.length > 0 && (
+                <Panel title="Pending Team Invitations Received" hint="Collaborations you have been invited to join." icon={<Mail size={16} />}>
+                  <div className="stack" style={{ gap: "10px" }}>
+                    {receivedInvitations.map((inv) => (
+                      <div key={inv.inviteId} style={{
+                        background: "var(--surface-soft)",
+                        border: "1px solid var(--border)",
+                        borderRadius: "var(--radius-md)",
+                        padding: "12px 16px",
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        gap: "14px"
+                      }}>
+                        <div>
+                          <span style={{ fontWeight: 600, color: "#fff", fontSize: "0.88rem" }}>Team: {inv.teamName}</span>
+                          <div style={{ fontSize: "0.72rem", color: "var(--text-muted)", marginTop: "2px" }}>
+                            Invited Date: {inv.invitedAt ? new Date(inv.invitedAt).toLocaleDateString() : "unknown"}
+                          </div>
+                        </div>
+                        <div style={{ display: "flex", gap: "8px" }}>
+                          <button
+                            className="btn btn-primary btn-sm"
+                            style={{ padding: "4px 10px", fontSize: "0.75rem" }}
+                            onClick={() => runAction(
+                              () => teamApi.acceptInvite(inv.teamId, inv.inviteId),
+                              null,
+                              () => {
+                                showToast(`Joined team: ${inv.teamName}`, "success");
+                                runAction(() => teamApi.list()).catch(() => {});
+                                runAction(() => teamApi.myInvitations(), setReceivedInvitations).catch(() => {});
+                              }
+                            )}
+                          >
+                            Accept
+                          </button>
+                          <button
+                            className="btn btn-danger btn-sm"
+                            style={{ padding: "4px 10px", fontSize: "0.75rem", background: "rgba(239, 68, 68, 0.15)", color: "#fca5a5", border: "1px solid rgba(239, 68, 68, 0.25)" }}
+                            onClick={() => runAction(
+                              () => teamApi.declineInvite(inv.teamId, inv.inviteId),
+                              null,
+                              () => {
+                                showToast(`Declined invitation to team: ${inv.teamName}`, "success");
+                                runAction(() => teamApi.myInvitations(), setReceivedInvitations).catch(() => {});
+                              }
+                            )}
+                          >
+                            Decline
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </Panel>
+              )}
 
               <div className="grid-2">
                 <Panel title="Quick Actions" hint="Reload database records dynamically." icon={<RefreshCw size={16} />}>
@@ -765,19 +979,31 @@ function App() {
                               </span>
                             </td>
                             <td>
-                              <button
-                                className="btn btn-ghost btn-sm"
-                                onClick={() => {
-                                  setWf({
-                                    id: w.id,
-                                    name: w.name,
-                                    active: w.active,
-                                    spec: w.spec || '{"steps":[]}',
-                                  });
-                                }}
-                              >
-                                Edit / Load
-                              </button>
+                              <div style={{ display: "flex", gap: "6px" }}>
+                                <button
+                                  className="btn btn-ghost btn-sm"
+                                  onClick={() => {
+                                    setWf({
+                                      id: w.id,
+                                      name: w.name,
+                                      active: w.active,
+                                      spec: w.spec || '{"steps":[]}',
+                                    });
+                                  }}
+                                >
+                                  Edit / Load
+                                </button>
+                                <button
+                                  className="btn btn-ghost btn-sm"
+                                  style={{ color: "var(--primary)" }}
+                                  onClick={() => {
+                                    setHook((p) => ({ ...p, workflowId: w.id }));
+                                    showToast("Target Workflow ID updated.", "success");
+                                  }}
+                                >
+                                  Trigger
+                                </button>
+                              </div>
                             </td>
                           </tr>
                         ))}
@@ -786,19 +1012,36 @@ function App() {
                   </div>
                 </Panel>
 
-                <Panel title="Trigger Manual Hook" hint="Run tests via HTTP callback endpoints." icon={<Sliders size={16} />}>
-                  <Field label="Target Workflow ID">
-                    <input placeholder="Enter workflow UUID" value={hook.workflowId} onChange={(e) => setHook((p) => ({ ...p, workflowId: e.target.value }))} />
-                  </Field>
+                <Panel title="Manual Webhook Trigger & Execution" hint="Initiate run nodes via HTTP callback triggers." icon={<Sliders size={16} />}>
+                  <div style={{ fontSize: "0.85rem", color: "var(--text-muted)", marginBottom: "14px", lineHeight: 1.4 }}>
+                    <p style={{ marginBottom: "6px" }}>Endpoint URL:</p>
+                    <pre className="console-output" style={{ fontSize: "0.75rem", margin: 0, padding: "8px", background: "#05070c", border: "1px solid var(--border)", overflowX: "auto" }}>
+                      POST {apiBaseUrl}/hooks/{hook.workflowId || ":workflowId"}
+                    </pre>
+                  </div>
+                  <div style={{ display: "flex", gap: "10px" }}>
+                    <Field label="Target Workflow ID" style={{ flex: 1 }}>
+                      <input placeholder="Enter workflow UUID" value={hook.workflowId} onChange={(e) => setHook((p) => ({ ...p, workflowId: e.target.value }))} />
+                    </Field>
+                    <Field label="Idempotency-Key" style={{ width: "180px" }}>
+                      <input placeholder="e.g. test-run-001" value={hook.idempotencyKey || ""} onChange={(e) => setHook((p) => ({ ...p, idempotencyKey: e.target.value }))} />
+                    </Field>
+                  </div>
                   <Field label="Trigger Payload (JSON)">
-                    <textarea rows={3} value={hook.payload} onChange={(e) => setHook((p) => ({ ...p, payload: e.target.value }))} />
+                    <textarea rows={4} value={hook.payload} onChange={(e) => setHook((p) => ({ ...p, payload: e.target.value }))} />
                   </Field>
                   <button
                     className="btn btn-primary"
                     disabled={!hook.workflowId || busy}
-                    onClick={() => runAction(() => hookApi.trigger(hook.workflowId, parseJsonOrEmpty(hook.payload), hook.idempotencyKey))}
+                    onClick={() => runAction(
+                      () => hookApi.trigger(hook.workflowId, parseJsonOrEmpty(hook.payload), hook.idempotencyKey),
+                      null,
+                      () => {
+                        showToast("Workflow execution queued successfully!", "success");
+                      }
+                    )}
                   >
-                    Execute Workflow Hook
+                    Execute Webhook Trigger
                   </button>
                 </Panel>
               </div>
@@ -850,20 +1093,165 @@ function App() {
                   )}
                 </div>
 
-                {/* Filter tags row */}
-                <div className="tab-row">
-                  {pluginCategories.map((cat) => (
-                    <button
-                      key={cat}
-                      className={`btn btn-sm ${pluginFilter === cat ? "btn-primary" : "btn-ghost"}`}
-                      style={{ padding: "4px 12px", borderRadius: "99px" }}
-                      onClick={() => setPluginFilter(cat)}
-                    >
-                      {cat}
-                    </button>
-                  ))}
+                 <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+                  {/* Filter tags row */}
+                  <div className="tab-row" style={{ margin: 0 }}>
+                    {pluginCategories.map((cat) => (
+                      <button
+                        key={cat}
+                        className={`btn btn-sm ${pluginFilter === cat ? "btn-primary" : "btn-ghost"}`}
+                        style={{ padding: "4px 12px", borderRadius: "99px" }}
+                        onClick={() => setPluginFilter(cat)}
+                      >
+                        {cat}
+                      </button>
+                    ))}
+                  </div>
+
+                  <button
+                    className="btn btn-primary btn-sm"
+                    style={{ borderRadius: "20px" }}
+                    onClick={() => {
+                      setEditingPlugin(null);
+                      setNewPluginForm({
+                        key: "",
+                        name: "",
+                        description: "",
+                        category: "Core",
+                        icon: "🔌",
+                        configSchema: '{"properties":{}}',
+                        active: true
+                      });
+                      setShowCreatePlugin(true);
+                    }}
+                  >
+                    <Plus size={14} />
+                    Register Custom Executor
+                  </button>
                 </div>
               </div>
+
+              {showCreatePlugin && (
+                <Panel
+                  title={editingPlugin ? "Update Custom Executor Plugin" : "Register Custom Executor Plugin"}
+                  hint="Create plugins to extend available step tasks in workflows."
+                  icon={<Sliders size={16} />}
+                >
+                  <div className="grid-2">
+                    <div className="stack" style={{ gap: "12px" }}>
+                      <div style={{ display: "flex", gap: "10px" }}>
+                        <Field label="Plugin Key" style={{ flex: 1 }}>
+                          <input
+                            placeholder="e.g. data_transform"
+                            value={newPluginForm.key}
+                            disabled={!!editingPlugin}
+                            onChange={(e) => setNewPluginForm((p) => ({ ...p, key: e.target.value }))}
+                          />
+                        </Field>
+                        <Field label="Category" style={{ width: "160px" }}>
+                          <select
+                            style={{
+                              width: "100%",
+                              padding: "8px 12px",
+                              background: "var(--surface-soft)",
+                              border: "1px solid var(--border)",
+                              borderRadius: "var(--radius-md)",
+                              color: "#fff"
+                            }}
+                            value={newPluginForm.category}
+                            onChange={(e) => setNewPluginForm((p) => ({ ...p, category: e.target.value }))}
+                          >
+                            <option value="Core">Core</option>
+                            <option value="Integration">Integration</option>
+                            <option value="Control Flow">Control Flow</option>
+                            <option value="Communication">Communication</option>
+                            <option value="Processing">Processing</option>
+                          </select>
+                        </Field>
+                      </div>
+
+                      <div style={{ display: "flex", gap: "10px" }}>
+                        <Field label="Plugin Name" style={{ flex: 1 }}>
+                          <input
+                            placeholder="e.g. Data Transform"
+                            value={newPluginForm.name}
+                            onChange={(e) => setNewPluginForm((p) => ({ ...p, name: e.target.value }))}
+                          />
+                        </Field>
+                        <Field label="Icon Emoji" style={{ width: "100px" }}>
+                          <input
+                            placeholder="🔄"
+                            value={newPluginForm.icon}
+                            onChange={(e) => setNewPluginForm((p) => ({ ...p, icon: e.target.value }))}
+                          />
+                        </Field>
+                      </div>
+
+                      <Field label="Description">
+                        <input
+                          placeholder="Short description of what the plugin does"
+                          value={newPluginForm.description}
+                          onChange={(e) => setNewPluginForm((p) => ({ ...p, description: e.target.value }))}
+                        />
+                      </Field>
+                    </div>
+
+                    <div className="stack" style={{ gap: "12px" }}>
+                      <Field label="Config Schema (JSON Definitions)">
+                        <textarea
+                          rows={6}
+                          placeholder='{"properties": {"myField": {"type": "string"}}}'
+                          value={newPluginForm.configSchema}
+                          onChange={(e) => setNewPluginForm((p) => ({ ...p, configSchema: e.target.value }))}
+                        />
+                      </Field>
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                        <input
+                          type="checkbox"
+                          id="plugin-active-checkbox"
+                          checked={newPluginForm.active}
+                          onChange={(e) => setNewPluginForm((p) => ({ ...p, active: e.target.checked }))}
+                        />
+                        <label htmlFor="plugin-active-checkbox" style={{ fontSize: "0.85rem", color: "#fff", cursor: "pointer" }}>
+                          Plugin Active & Available in Designer
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="btn-row" style={{ marginTop: "18px" }}>
+                    <button
+                      className="btn btn-primary"
+                      onClick={() => {
+                        const action = editingPlugin
+                          ? () => pluginApi.update(editingPlugin.id, newPluginForm)
+                          : () => pluginApi.create(newPluginForm);
+                        runAction(
+                          action,
+                          null,
+                          () => {
+                            showToast(editingPlugin ? "Plugin updated successfully!" : "Plugin registered successfully!", "success");
+                            setShowCreatePlugin(false);
+                            setEditingPlugin(null);
+                            runAction(() => pluginApi.list(), setPluginsCache);
+                          }
+                        );
+                      }}
+                    >
+                      {editingPlugin ? "Save Plugin Modifications" : "Register Executor Plugin"}
+                    </button>
+                    <button
+                      className="btn btn-ghost"
+                      onClick={() => {
+                        setShowCreatePlugin(false);
+                        setEditingPlugin(null);
+                      }}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </Panel>
+              )}
 
               {filteredPlugins.length === 0 ? (
                 <div className="card" style={{ textAlign: "center", padding: "40px", color: "var(--text-muted)" }}>
@@ -878,8 +1266,22 @@ function App() {
                         <div className="plugin-icon-wrap">
                           {getPluginIcon(plugin.icon, 22)}
                         </div>
-                        <div className="plugin-meta">
-                          <span className="plugin-name">{plugin.name}</span>
+                        <div className="plugin-meta" style={{ flex: 1 }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px" }}>
+                            <span className="plugin-name">{plugin.name}</span>
+                            <span style={{
+                              fontSize: "0.65rem",
+                              fontWeight: 700,
+                              color: plugin.active !== false ? "var(--success)" : "var(--danger)",
+                              background: plugin.active !== false ? "rgba(16, 185, 129, 0.08)" : "rgba(239, 68, 68, 0.08)",
+                              padding: "2px 6px",
+                              borderRadius: "10px",
+                              border: plugin.active !== false ? "1px solid rgba(16, 185, 129, 0.15)" : "1px solid rgba(239, 68, 68, 0.15)",
+                              textTransform: "uppercase"
+                            }}>
+                              {plugin.active !== false ? "Active" : "Inactive"}
+                            </span>
+                          </div>
                           <span className="plugin-cat-badge">{plugin.category}</span>
                         </div>
                       </div>
@@ -924,8 +1326,46 @@ function App() {
                       Integration Key: <strong className="mono" style={{ fontSize: "0.85rem" }}>{selectedPlugin.key}</strong>
                     </span>
                     <span style={{ fontSize: "0.85rem", color: "var(--text-muted)" }}>
-                      Status: <strong style={{ color: "var(--success)" }}>Active Catalog</strong>
+                      Status: <strong style={{ color: selectedPlugin.active !== false ? "var(--success)" : "var(--danger)" }}>{selectedPlugin.active !== false ? "Active Catalog" : "Inactive"}</strong>
                     </span>
+                  </div>
+
+                  <div className="btn-row" style={{ marginTop: "8px", gap: "8px" }}>
+                    <button
+                      className="btn btn-primary btn-sm"
+                      style={{ flex: 1, padding: "6px" }}
+                      onClick={() => {
+                        setEditingPlugin(selectedPlugin);
+                        setNewPluginForm({
+                          key: selectedPlugin.key,
+                          name: selectedPlugin.name,
+                          description: selectedPlugin.description,
+                          category: selectedPlugin.category,
+                          icon: selectedPlugin.icon || "🔌",
+                          configSchema: selectedPlugin.configSchema || '{"properties":{}}',
+                          active: selectedPlugin.active !== false
+                        });
+                        setShowCreatePlugin(true);
+                        setSelectedPlugin(null);
+                      }}
+                    >
+                      Edit Plugin
+                    </button>
+                    <button
+                      className="btn btn-danger btn-sm"
+                      style={{ flex: 1, padding: "6px", background: "rgba(239, 68, 68, 0.15)", color: "#fca5a5", border: "1px solid rgba(239, 68, 68, 0.25)" }}
+                      onClick={() => runAction(
+                        () => pluginApi.remove(selectedPlugin.id),
+                        null,
+                        () => {
+                          showToast("Plugin successfully deleted.", "success");
+                          setSelectedPlugin(null);
+                          runAction(() => pluginApi.list(), setPluginsCache);
+                        }
+                      )}
+                    >
+                      Delete Plugin
+                    </button>
                   </div>
 
                   {selectedPlugin.configSchema && (
@@ -954,64 +1394,240 @@ function App() {
 
           {/* TEAMS MANAGEMENT */}
           {page === "Teams" && (
-            <div className="grid-2">
-              <Panel title="Team Workspaces" hint="Manage collaborative team workspaces." icon={<Users size={16} />}>
-                <Field label="New Team Name">
-                  <input placeholder="e.g. Platform Engineering" value={team.teamName} onChange={(e) => setTeam((p) => ({ ...p, teamName: e.target.value }))} />
-                </Field>
-                <div className="btn-row">
-                  <button className="btn btn-primary" disabled={busy} onClick={() => runAction(() => teamApi.create({ name: team.teamName }), null, (data) => { if (data?.teamId) setTeam((p) => ({ ...p, teamId: String(data.teamId) })); })}>
-                    Create New Team
-                  </button>
-                  <button className="btn btn-ghost" disabled={busy} onClick={() => runAction(() => teamApi.list())}>
-                    List My Teams
-                  </button>
-                </div>
-
-                <div style={{ borderTop: "1px solid var(--border)", paddingTop: "18px", marginTop: "10px" }}>
-                  <Field label="Selected Team Workspace ID">
-                    <input placeholder="Workspace ID" value={team.teamId} onChange={(e) => setTeam((p) => ({ ...p, teamId: e.target.value }))} />
+            <div className="stack" style={{ gap: "24px" }}>
+              <div className="grid-2">
+                <Panel title="Team Workspaces" hint="Manage collaborative team workspaces." icon={<Users size={16} />}>
+                  <Field label="New Team Name">
+                    <input placeholder="e.g. Platform Engineering" value={team.teamName} onChange={(e) => setTeam((p) => ({ ...p, teamName: e.target.value }))} />
                   </Field>
-                  <div className="btn-row" style={{ marginTop: "10px" }}>
-                    <button className="btn btn-ghost btn-sm" disabled={!team.teamId || busy} onClick={() => runAction(() => teamApi.members(team.teamId))}>
-                      View Members
+                  <div className="btn-row">
+                    <button
+                      className="btn btn-primary"
+                      disabled={busy}
+                      onClick={() => runAction(
+                        () => teamApi.create({ name: team.teamName }),
+                        null,
+                        (data) => {
+                          if (data?.teamId) {
+                            setTeam((p) => ({ ...p, teamId: String(data.teamId), teamName: "" }));
+                            refreshTeamWorkspaceInfo(data.teamId);
+                            runAction(() => teamApi.list(), setMyTeamsList);
+                            showToast("Team created successfully!", "success");
+                          }
+                        }
+                      )}
+                    >
+                      Create New Team
+                    </button>
+                    <button className="btn btn-ghost" disabled={busy} onClick={() => runAction(() => teamApi.list())}>
+                      List My Teams
                     </button>
                   </div>
-                </div>
-              </Panel>
 
-              <Panel title="Workspace Invites & API Keys" hint="Invite teammates or create keys for pipelines." icon={<Lock size={16} />}>
-                <div className="stack" style={{ gap: "14px" }}>
-                  <Field label="Invite Email">
-                    <input placeholder="engineer@company.com" value={team.inviteEmail} onChange={(e) => setTeam((p) => ({ ...p, inviteEmail: e.target.value }))} />
-                  </Field>
-                  <button className="btn btn-ghost" disabled={!team.teamId || busy} onClick={() => runAction(() => teamApi.invite(team.teamId, { email: team.inviteEmail }))}>
-                    Send Email Invitation
-                  </button>
-                </div>
+                  <div style={{ borderTop: "1px solid var(--border)", paddingTop: "18px", marginTop: "10px" }}>
+                    <Field label="Select Workspace Team">
+                      {myTeamsList.length === 0 ? (
+                        <p className="field-hint" style={{ color: "var(--text-muted)", margin: 0 }}>No teams joined yet. Create a team above.</p>
+                      ) : (
+                        <select
+                          style={{
+                            width: "100%",
+                            padding: "8px 12px",
+                            background: "var(--surface-soft)",
+                            border: "1px solid var(--border)",
+                            borderRadius: "var(--radius-md)",
+                            color: "#fff"
+                          }}
+                          value={team.teamId}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setTeam((p) => ({ ...p, teamId: val }));
+                            if (val) refreshTeamWorkspaceInfo(val);
+                          }}
+                        >
+                          <option value="">-- Choose Joined Team --</option>
+                          {myTeamsList.map((t) => (
+                            <option key={t.id} value={t.id}>
+                              {t.name} (Role: {t.role || "MEMBER"})
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                    </Field>
+                    <div style={{ display: "flex", gap: "10px", marginTop: "12px", alignItems: "center" }}>
+                      <Field label="Or Enter Team ID" style={{ flex: 1, margin: 0 }}>
+                        <input
+                          placeholder="Workspace ID"
+                          value={team.teamId}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setTeam((p) => ({ ...p, teamId: val }));
+                            if (val) refreshTeamWorkspaceInfo(val);
+                          }}
+                        />
+                      </Field>
+                      <button
+                        className="btn btn-ghost btn-sm"
+                        style={{ alignSelf: "flex-end", height: "36px" }}
+                        disabled={!team.teamId || busy}
+                        onClick={() => {
+                          refreshTeamWorkspaceInfo(team.teamId);
+                          runAction(() => teamApi.list(), setMyTeamsList);
+                        }}
+                      >
+                        Sync Info
+                      </button>
+                    </div>
+                  </div>
+                </Panel>
 
-                <div style={{ borderTop: "1px solid var(--border)", paddingTop: "18px", marginTop: "10px" }}>
-                  <div style={{ display: "flex", gap: "10px" }}>
-                    <Field label="Key Description">
-                      <input placeholder="CI/CD Pipeline Key" value={team.keyName} onChange={(e) => setTeam((p) => ({ ...p, keyName: e.target.value }))} />
+                <Panel title="Workspace Invites & API Keys" hint="Invite teammates or create keys for pipelines." icon={<Lock size={16} />}>
+                  <div className="stack" style={{ gap: "14px" }}>
+                    <Field label="Invite Email">
+                      <input placeholder="engineer@company.com" value={team.inviteEmail} onChange={(e) => setTeam((p) => ({ ...p, inviteEmail: e.target.value }))} />
                     </Field>
-                    <Field label="Key ID (for revocation)">
-                      <input placeholder="Key ID" value={team.keyId} onChange={(e) => setTeam((p) => ({ ...p, keyId: e.target.value }))} />
-                    </Field>
+                    <button
+                      className="btn btn-ghost"
+                      disabled={!team.teamId || busy}
+                      onClick={() => runAction(
+                        () => teamApi.invite(team.teamId, { email: team.inviteEmail }),
+                        null,
+                        (data) => {
+                          refreshTeamWorkspaceInfo(team.teamId);
+                          setTeam((p) => ({ ...p, inviteEmail: "" }));
+                          showToast(`Successfully invited ${data?.email} (Invite ID: ${data?.inviteId})`, "success");
+                        }
+                      )}
+                    >
+                      Send Email Invitation
+                    </button>
                   </div>
-                  <div className="btn-row" style={{ marginTop: "10px" }}>
-                    <button className="btn btn-primary btn-sm" disabled={!team.teamId || busy} onClick={() => runAction(() => keyApi.create(team.teamId, { name: team.keyName }))}>
-                      Generate API Key
-                    </button>
-                    <button className="btn btn-ghost btn-sm" disabled={!team.teamId || busy} onClick={() => runAction(() => keyApi.list(team.teamId))}>
-                      List Active Keys
-                    </button>
-                    <button className="btn btn-danger btn-sm" disabled={!team.teamId || !team.keyId || busy} onClick={() => runAction(() => keyApi.revoke(team.teamId, team.keyId))}>
-                      Revoke Key
+
+                  <div style={{ borderTop: "1px solid var(--border)", paddingTop: "14px", marginTop: "10px" }}>
+                    <div style={{ display: "flex", gap: "10px" }}>
+                      <Field label="Accept Team ID">
+                        <input placeholder="Enter Team ID" value={team.teamId} onChange={(e) => setTeam((p) => ({ ...p, teamId: e.target.value }))} />
+                      </Field>
+                      <Field label="Accept Invite ID">
+                        <input placeholder="Enter Invite ID" value={team.inviteId} onChange={(e) => setTeam((p) => ({ ...p, inviteId: e.target.value }))} />
+                      </Field>
+                    </div>
+                    <button
+                      className="btn btn-ghost btn-sm"
+                      style={{ marginTop: "6px" }}
+                      disabled={!team.teamId || !team.inviteId || busy}
+                      onClick={() => runAction(
+                        () => teamApi.acceptInvite(team.teamId, team.inviteId),
+                        null,
+                        () => {
+                          refreshTeamWorkspaceInfo(team.teamId);
+                          setTeam((p) => ({ ...p, inviteId: "" }));
+                        }
+                      )}
+                    >
+                      Accept Workspace Invite
                     </button>
                   </div>
+
+                  <div style={{ borderTop: "1px solid var(--border)", paddingTop: "18px", marginTop: "10px" }}>
+                    <div style={{ display: "flex", gap: "10px" }}>
+                      <Field label="Key Description">
+                        <input placeholder="CI/CD Pipeline Key" value={team.keyName} onChange={(e) => setTeam((p) => ({ ...p, keyName: e.target.value }))} />
+                      </Field>
+                      <Field label="Key ID (for revocation)">
+                        <input placeholder="Key ID" value={team.keyId} onChange={(e) => setTeam((p) => ({ ...p, keyId: e.target.value }))} />
+                      </Field>
+                    </div>
+                    <div className="btn-row" style={{ marginTop: "10px" }}>
+                      <button className="btn btn-primary btn-sm" disabled={!team.teamId || busy} onClick={() => runAction(() => keyApi.create(team.teamId, { name: team.keyName }))}>
+                        Generate API Key
+                      </button>
+                      <button className="btn btn-ghost btn-sm" disabled={!team.teamId || busy} onClick={() => runAction(() => keyApi.list(team.teamId))}>
+                        List Active Keys
+                      </button>
+                      <button className="btn btn-danger btn-sm" disabled={!team.teamId || !team.keyId || busy} onClick={() => runAction(() => keyApi.revoke(team.teamId, team.keyId))}>
+                        Revoke Key
+                      </button>
+                    </div>
+                  </div>
+                </Panel>
+              </div>
+
+              {/* Members and Pending Invites tables */}
+              {team.teamId && (
+                <div className="grid-2">
+                  <Panel title="Active Members" hint="Currently accepted users in this workspace." icon={<Users size={16} />}>
+                    {teamMembersList.length === 0 ? (
+                      <p className="panel-hint">No active members found. Refresh workspace details.</p>
+                    ) : (
+                      <div className="table-wrap" style={{ maxHeight: "280px", overflowY: "auto" }}>
+                        <table>
+                          <thead>
+                            <tr>
+                              <th>User Email</th>
+                              <th>Joined At</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {teamMembersList.map((m) => (
+                              <tr key={m.id}>
+                                <td style={{ fontWeight: 600, color: "#fff", fontSize: "0.85rem" }}>{m.email}</td>
+                                <td className="mono" style={{ fontSize: "0.78rem" }}>
+                                  {m.acceptedAt ? new Date(m.acceptedAt).toLocaleDateString() : "-"}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </Panel>
+
+                  <Panel title="Pending Invitations" hint="Invited users who haven't accepted yet." icon={<Clock size={16} />}>
+                    {pendingInvitesList.length === 0 ? (
+                      <p className="panel-hint">No pending invitations found.</p>
+                    ) : (
+                      <div className="table-wrap" style={{ maxHeight: "280px", overflowY: "auto" }}>
+                        <table>
+                          <thead>
+                            <tr>
+                              <th>Email</th>
+                              <th>Invited At</th>
+                              <th>Action</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {pendingInvitesList.map((m) => (
+                              <tr key={m.id}>
+                                <td style={{ fontWeight: 600, color: "#fff", fontSize: "0.85rem" }}>{m.email}</td>
+                                <td className="mono" style={{ fontSize: "0.78rem" }}>
+                                  {m.invitedAt ? new Date(m.invitedAt).toLocaleDateString() : "-"}
+                                </td>
+                                <td>
+                                  <button
+                                    className="btn btn-danger btn-sm"
+                                    style={{ padding: "4px 8px", background: "rgba(239, 68, 68, 0.15)", color: "#fca5a5", border: "1px solid rgba(239, 68, 68, 0.25)" }}
+                                    onClick={() => runAction(
+                                      () => teamApi.cancelInvite(team.teamId, m.id),
+                                      null,
+                                      () => {
+                                        refreshTeamWorkspaceInfo(team.teamId);
+                                        showToast(`Invitation to ${m.email} successfully cancelled.`, "success");
+                                      }
+                                    )}
+                                  >
+                                    Cancel
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </Panel>
                 </div>
-              </Panel>
+              )}
             </div>
           )}
 
@@ -1078,6 +1694,25 @@ function App() {
 
         </div>
       </main>
+
+      {toast && (
+        <div className="toast" style={{
+          position: "fixed",
+          bottom: "24px",
+          right: "24px",
+          background: toast.type === "error" ? "rgba(220, 38, 38, 0.95)" : "rgba(16, 185, 129, 0.95)",
+          border: toast.type === "error" ? "1px solid #ef4444" : "1px solid #10b981",
+          color: "#fff",
+          padding: "12px 20px",
+          borderRadius: "8px",
+          boxShadow: "0 10px 25px rgba(0,0,0,0.5)",
+          zIndex: 99999,
+          fontSize: "0.85rem",
+          fontWeight: 600
+        }}>
+          {toast.message}
+        </div>
+      )}
     </div>
   );
 }
