@@ -296,7 +296,7 @@ function AuthScreen({ onAuthed }) {
           <div style={{ flex: 1, height: "1px", background: "var(--border)" }}></div>
         </div>
 
-        <a className="btn btn-ghost" href={`${apiBaseUrl}/oauth2/authorization/google`} target="_blank" rel="noreferrer">
+        <a className="btn btn-ghost" href={`${apiBaseUrl}/oauth2/authorization/google`}>
           <Globe size={16} style={{ marginRight: "4px" }} />
           Continue with Google
         </a>
@@ -405,6 +405,20 @@ function App() {
   useEffect(() => {
     // Load public plugins list (accessible without auth)
     runAction(() => pluginApi.listPublic(), setPluginsCache).catch(() => {});
+  }, []);
+
+  // Scanner for Google OAuth return token
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const urlToken = params.get("token");
+    if (urlToken) {
+      setAuthToken(urlToken);
+      setIsAuthed(true);
+      // Clear token query parameter from address bar
+      const newUrl = window.location.pathname;
+      window.history.replaceState({}, document.title, newUrl);
+      showToast("Successfully logged in via Google!", "success");
+    }
   }, []);
 
   useEffect(() => {
